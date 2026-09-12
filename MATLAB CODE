@@ -1,0 +1,622 @@
+%% EXPERIMENT 7 - PULSE SHAPING AND THE NYQUIST CRITERION
+% Digital Communication Laboratory
+% Rectangular, Sinc, Raised Cosine and Root Raised Cosine pulses
+
+clear;
+close all;
+clc;
+
+%% 1. GLOBAL PARAMETERS
+Ts = 1;                    % Symbol period
+sps = 16;                  % Samples per symbol
+Fs = sps/Ts;              % Sampling frequency
+span = 8;                  % Filter span in symbols
+alphas = [0 0.25 0.5 1];   % Roll-off factors
+
+colors = lines(length(alphas));
+
+t = -span*Ts : 1/Fs : span*Ts;
+
+fprintf('Ts = %g s, Fs = %g Hz, sps = %d, span = +/- %d symbols\n', ...
+    Ts, Fs, sps, span);
+
+
+%% 2. RECTANGULAR PULSE
+rect_pulse = double(abs(t) <= Ts/2);
+
+
+%% 3. SINC PULSE
+sinc_pulse = zeros(size(t));
+
+for k = 1:length(t)
+
+    if t(k) == 0
+        sinc_pulse(k) = 1;
+    else
+        x = pi*t(k)/Ts;
+        sinc_pulse(k) = sin(x)/x;
+    end
+
+end
+
+
+%% 4. GENERATE RC AND RRC PULSES
+RC = zeros(length(alphas), length(t));
+RRC = zeros(length(alphas), length(t));
+
+for i = 1:length(alphas)
+
+    alpha = alphas(i);
+
+    for k = 1:length(t)
+
+        tk = t(k);
+
+        % =========================================================
+        % RAISED COSINE
+        % =========================================================
+
+        if alpha == 0
+
+            if tk == 0
+                RC(i,k) = 1;
+            else
+                x = pi*tk/Ts;
+                RC(i,k) = sin(x)/x;
+            end
+
+        else
+
+            denominator = 1 - (2*alpha*tk/Ts)^2;
+
+            % t = 0
+            if abs(tk) < 1e-12
+
+                RC(i,k) = 1;
+
+            % t = +/- Ts/(2*alpha)
+            elseif abs(denominator) < 1e-10
+
+                RC(i,k) = (alpha/2) * sin(pi/(2*alpha));
+
+            else
+
+                x = pi*tk/Ts;
+
+                RC(i,k) = ...
+                    (sin(x)/x) .* ...
+                    cos(pi*alpha*tk/Ts) ./ denominator;
+
+            end
+        end
+
+
+        % =========================================================
+        % ROOT RAISED COSINE
+        % =========================================================
+
+        if alpha == 0
+
+            if abs(tk) < 1e-12
+                RRC(i,k) = 1/sqrt(Ts);
+            else
+                x = pi*tk/Ts;
+                RRC(i,k) = sin(x)/x/sqrt(Ts);
+            end
+
+        else
+
+            % t = 0
+            if abs(tk) < 1e-12
+
+                RRC(i,k) = ...
+                    (1/sqrt(Ts)) * ...
+                    (1 - alpha + 4*alpha/pi);
+
+            % t = +/- Ts/(4*alpha)
+            elseif abs(abs(4*alpha*tk/Ts) - 1) < 1e-10
+
+                a = alpha;
+
+                RRC(i,k) = ...
+                    (a/sqrt(2*Ts)) * ...
+                    ((1 + 2/pi)*sin(pi/(4*a)) + ...
+                     (1 - 2/pi)*cos(pi/(4*a)));
+
+            else
+
+                numerator = ...
+                    sin(pi*tk/Ts*(1-alpha)) + ...
+                    4*alpha*tk/Ts * ...
+                    cos(pi*tk/Ts*(1+alpha));
+
+                denominator = ...
+                    pi*tk/Ts * ...
+                    (1 - (4*alpha*tk/Ts)^2);
+
+                RRC(i,k) = ...
+                    (numerator/denominator)/sqrt(Ts);
+
+            end
+        end
+
+    end
+
+end
+
+
+%% 5. PLOT RAISED COSINE PULSES
+
+figure;
+hold on;
+
+for i = 1:length(alphas)
+
+    plot(t/Ts, RC(i,:), ...
+        'Color', colors(i,:), ...
+        'LineWidth', 1.5);
+
+end
+
+xlabel('t/T_s');
+ylabel('h_{RC}(t)');
+title('Raised-Cosine Pulse for Different Roll-Off Factors');
+legend('\alpha = 0', '\alpha = 0.25', ...
+       '\alpha = 0.5', '\alpha = 1');
+
+grid on;
+hold off;
+
+
+%% 6. PLOT ROOT RAISED COSINE PULSES
+
+figure;
+hold on;
+
+for i = 1:length(alphas)
+
+    plot(t/Ts, RRC(i,:), ...
+        'Color', colors(i,:), ...
+        'LineWidth', 1.5);
+
+end
+
+xlabel('t/T_s');
+ylabel('h_{RRC}(t)');
+title('Root Raised-Cosine Pulse for Different Roll-Off Factors');
+legend('\alpha = 0', '\alpha = 0.25', ...
+       '\alpha = 0.5', '\alpha = 1');
+
+grid on;
+hold off;
+
+
+%% 7. RECTANGULAR VS SINC VS RC VS RRC
+
+alpha_test = 0.5;
+
+% Find alpha = 0.5
+idx_alpha = find(alphas == alpha_test);
+
+rc_test = RC(idx_alpha,:);
+rrc_test = RRC(idx_alpha,:);
+
+% Normalize RRC for visual comparison
+rrc_test_normalized = rrc_test / max(abs(rrc_test));
+
+figure;
+
+plot(t/Ts, rect_pulse, ...
+    'LineWidth', 1.3);
+hold on;
+
+plot(t/Ts, sinc_pulse, ...
+    'LineWidth', 1.3);
+
+plot(t/Ts, rc_test, ...
+    'LineWidth', 1.5);
+
+plot(t/Ts, rrc_test_normalized, ...
+    'LineWidth', 1.5);
+
+xlabel('t/T_s');
+ylabel('Amplitude');
+
+title('Rectangular vs Sinc vs RC vs RRC');
+
+legend('Rectangular', ...
+       'Sinc (Ideal Nyquist)', ...
+       'RC, \alpha = 0.5', ...
+       'RRC, \alpha = 0.5');
+
+grid on;
+hold off;
+
+
+%% 8. FREQUENCY RESPONSE OF RC
+
+Nfft = 8192;
+
+f = (-Nfft/2:Nfft/2-1)*(Fs/Nfft);
+
+figure;
+hold on;
+
+for i = 1:length(alphas)
+
+    H = fftshift(fft(RC(i,:), Nfft));
+
+    H = abs(H);
+
+    H = H/max(H);
+
+    plot(f*Ts, H, ...
+        'Color', colors(i,:), ...
+        'LineWidth', 1.5);
+
+end
+
+xlim([-1.2 1.2]);
+
+xlabel('fT_s');
+ylabel('|H(f)|');
+
+title('Raised-Cosine Frequency Response');
+
+legend('\alpha = 0', '\alpha = 0.25', ...
+       '\alpha = 0.5', '\alpha = 1');
+
+grid on;
+hold off;
+
+
+%% 9. FREQUENCY RESPONSE OF RRC
+
+figure;
+hold on;
+
+for i = 1:length(alphas)
+
+    H = fftshift(fft(RRC(i,:), Nfft));
+
+    H = abs(H);
+
+    H = H/max(H);
+
+    plot(f*Ts, H, ...
+        'Color', colors(i,:), ...
+        'LineWidth', 1.5);
+
+end
+
+xlim([-1.2 1.2]);
+
+xlabel('fT_s');
+ylabel('|H_{RRC}(f)|');
+
+title('Root Raised-Cosine Frequency Response');
+
+legend('\alpha = 0', '\alpha = 0.25', ...
+       '\alpha = 0.5', '\alpha = 1');
+
+grid on;
+hold off;
+
+
+%% 10. GENERATE BPSK SYMBOLS
+
+Nsyms = 20;
+
+rng(1);
+
+symbols = 2*randi([0 1], 1, Nsyms) - 1;
+
+impulse_train = zeros(1, Nsyms*sps);
+
+impulse_train(1:sps:end) = symbols;
+
+
+%% 11. RC PULSE SHAPING
+
+h_rc = rc_test;
+
+% Normalize
+h_rc = h_rc/max(abs(h_rc));
+
+shaped = conv(impulse_train, h_rc);
+
+delay = span*sps;
+
+
+figure;
+
+stem(0:length(impulse_train)-1, ...
+     impulse_train, ...
+     'filled');
+
+hold on;
+
+plot((0:length(shaped)-1)-delay, ...
+     shaped, ...
+     'LineWidth', 1.3);
+
+xlim([0 Nsyms*sps]);
+
+xlabel('Sample Index');
+ylabel('Amplitude');
+
+title('RC Pulse-Shaped BPSK Signal, \alpha = 0.5');
+
+legend('Symbol impulses', ...
+       'RC pulse-shaped signal');
+
+grid on;
+hold off;
+
+
+%% 12. NYQUIST ZERO-CROSSING VERIFICATION
+
+n_check = -5:5;
+
+t_check = n_check*Ts;
+
+h_at_syms = zeros(size(t_check));
+
+for k = 1:length(t_check)
+
+    tk = t_check(k);
+
+    alpha = alpha_test;
+
+    denominator = 1 - (2*alpha*tk/Ts)^2;
+
+    if abs(tk) < 1e-12
+
+        h_at_syms(k) = 1;
+
+    elseif abs(denominator) < 1e-10
+
+        h_at_syms(k) = ...
+            (alpha/2)*sin(pi/(2*alpha));
+
+    else
+
+        x = pi*tk/Ts;
+
+        h_at_syms(k) = ...
+            (sin(x)/x) * ...
+            cos(pi*alpha*tk/Ts) / denominator;
+
+    end
+
+end
+
+
+% Normalize
+h_at_syms = h_at_syms / h_at_syms(n_check == 0);
+
+
+fprintf('\n');
+fprintf('============================================\n');
+fprintf('NYQUIST ZERO-CROSSING VERIFICATION\n');
+fprintf('RC alpha = %.2f\n', alpha_test);
+fprintf('============================================\n');
+
+fprintf(' n       t/Ts        h(nTs)\n');
+
+for k = 1:length(n_check)
+
+    fprintf('%3d     %5.1f      %+0.6f\n', ...
+        n_check(k), ...
+        t_check(k)/Ts, ...
+        h_at_syms(k));
+
+end
+
+nonzero_indices = n_check ~= 0;
+
+max_sidelobe = max(abs(h_at_syms(nonzero_indices)));
+
+fprintf('\nExpected:\n');
+fprintf('h(0) = 1\n');
+fprintf('h(nTs) = 0 for n ~= 0\n');
+
+fprintf('\nMaximum sidelobe at non-zero symbol instants = %.3e\n', ...
+    max_sidelobe);
+
+
+%% 13. RRC TRANSMITTER + RRC RECEIVER
+
+h_rrc = rrc_test;
+
+% Normalize
+h_rrc = h_rrc/max(abs(h_rrc));
+
+% Transmitter
+tx_shaped = conv(impulse_train, h_rrc);
+
+% Receiver matched filter
+rx_output = conv(tx_shaped, h_rrc);
+
+% Normalize
+rx_output = rx_output/max(abs(rx_output));
+
+total_delay = 2*span*sps;
+
+
+%% 14. CASCADED RRC RESPONSE
+
+figure;
+
+plot((0:length(rx_output)-1)-total_delay, ...
+     rx_output, ...
+     'LineWidth', 1.3);
+
+hold on;
+
+plot(t/Ts*sps, ...
+     h_rc, ...
+     '--', ...
+     'LineWidth', 1.2);
+
+xlim([-span*sps span*sps]);
+
+xlabel('Sample Index Relative to Center');
+ylabel('Amplitude');
+
+title('RRC Tx + RRC Rx Cascade');
+
+legend('RRC * RRC', ...
+       'Reference RC');
+
+grid on;
+hold off;
+
+
+%% 15. CASCADE NYQUIST VERIFICATION
+
+sample_idx = total_delay + n_check*sps + 1;
+
+valid = sample_idx >= 1 & sample_idx <= length(rx_output);
+
+cascade_samples = rx_output(sample_idx(valid));
+
+fprintf('\n');
+fprintf('============================================\n');
+fprintf('RRC CASCADE NYQUIST VERIFICATION\n');
+fprintf('============================================\n');
+
+fprintf(' n       Cascade Response\n');
+
+valid_n = n_check(valid);
+
+for k = 1:length(cascade_samples)
+
+    fprintf('%3d       %+0.6f\n', ...
+        valid_n(k), ...
+        cascade_samples(k));
+
+end
+
+
+%% 16. BANDWIDTH VS ROLL-OFF FACTOR
+
+alpha_sweep = 0:0.05:1;
+
+B_theory = (1 + alpha_sweep)/(2*Ts);
+
+B_measured = zeros(size(alpha_sweep));
+
+
+for i = 1:length(alpha_sweep)
+
+    alpha = alpha_sweep(i);
+
+    hh = zeros(size(t));
+
+    for k = 1:length(t)
+
+        tk = t(k);
+
+        if alpha == 0
+
+            if abs(tk) < 1e-12
+                hh(k) = 1;
+            else
+                x = pi*tk/Ts;
+                hh(k) = sin(x)/x;
+            end
+
+        else
+
+            denominator = ...
+                1 - (2*alpha*tk/Ts)^2;
+
+            if abs(tk) < 1e-12
+
+                hh(k) = 1;
+
+            elseif abs(denominator) < 1e-10
+
+                hh(k) = ...
+                    (alpha/2)*sin(pi/(2*alpha));
+
+            else
+
+                x = pi*tk/Ts;
+
+                hh(k) = ...
+                    (sin(x)/x) * ...
+                    cos(pi*alpha*tk/Ts) / denominator;
+
+            end
+
+        end
+
+    end
+
+
+    H = abs(fftshift(fft(hh,Nfft)));
+
+    H = H/max(H);
+
+    positive = f >= 0;
+
+    fpos = f(positive);
+    Hpos = H(positive);
+
+    index = find(Hpos < 0.01, 1, 'first');
+
+    if isempty(index)
+
+        index = length(fpos);
+
+    end
+
+    B_measured(i) = fpos(index);
+
+end
+
+
+%% 17. PLOT BANDWIDTH VS ROLL-OFF
+
+figure;
+
+plot(alpha_sweep, ...
+     B_theory, ...
+     'LineWidth', 1.8);
+
+hold on;
+
+plot(alpha_sweep, ...
+     B_measured, ...
+     'o');
+
+xlabel('Roll-off Factor \alpha');
+
+ylabel('Bandwidth (Hz)');
+
+title('Bandwidth vs Roll-Off Factor');
+
+legend('Theory: (1+\alpha)/(2T_s)', ...
+       'Measured using FFT');
+
+grid on;
+
+hold off;
+
+
+%% 18. FINAL MESSAGE
+
+fprintf('\n');
+fprintf('============================================\n');
+fprintf('EXPERIMENT 7 COMPLETED SUCCESSFULLY\n');
+fprintf('============================================\n');
+
+fprintf('Total figures generated: %d\n', ...
+    length(findall(0,'Type','figure')));
+
+fprintf('\nKey result:\n');
+fprintf('Raised-cosine pulses satisfy the Nyquist zero-ISI criterion.\n');
+fprintf('Increasing alpha increases the occupied bandwidth.\n');
+fprintf('RRC transmitter + RRC receiver produces an RC response.\n');
